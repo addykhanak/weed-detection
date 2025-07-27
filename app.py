@@ -1,38 +1,43 @@
+import os
+import gdown
 import streamlit as st
 import numpy as np
+from PIL import Image
 from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
-import cv2
-import os
+from tensorflow.keras.preprocessing.image import img_to_array
 
-# Load the trained model
-MODEL_PATH = "models/weed_detection_model.keras"
-model = load_model(MODEL_PATH)
+# Path where model will be stored locally
+model_path = "models/weed_detection_model.keras"
 
-st.title("Weed Detection App 🌱")
-st.write("Upload an image of a plant to check if it contains weed.")
+# Google Drive file ID extracted from your link
+drive_url = "https://drive.google.com/uc?id=17yQXcPjRTA8MlElJI-3OeM7Gjj92tgdd"
 
-# File uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+# Auto-download model if it doesn't exist
+if not os.path.exists(model_path):
+    os.makedirs("models", exist_ok=True)
+    st.info("Downloading model... Please wait.")
+    gdown.download(drive_url, model_path, quiet=False)
+
+# Load the model
+model = load_model(model_path)
+
+# Streamlit app interface
+st.title("Weed Detection in Plants 🌿")
+
+uploaded_file = st.file_uploader("Upload a leaf image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Display uploaded image
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    img = cv2.imdecode(file_bytes, 1)
-    # st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), channels="RGB", caption="Uploaded Image", use_column_width=True)
-    st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), channels="RGB", caption="Uploaded Image", use_container_width=True)
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    # Preprocess the image
-    img_resized = cv2.resize(img, (128, 128)) / 255.0  # Resize and normalize
-    img_array = np.expand_dims(img_resized, axis=0)    # Add batch dimension
+    # Preprocess image
+    image = image.resize((128, 128))  # Update size based on your model input
+    image_array = img_to_array(image) / 255.0
+    image_array = np.expand_dims(image_array, axis=0)
 
     # Predict
-    prediction = model.predict(img_array)
-    class_idx = np.argmax(prediction)
-    confidence = prediction[0][class_idx]
+    prediction = model.predict(image_array)
+    class_label = "Weed" if prediction[0][0] > 0.5 else "Not Weed"
 
-    if class_idx == 1:
-        st.success(f"✅ No weed detected with confidence: {confidence:.2f}")
-        
-    else:
-        st.success(f"🌾 Weed detected with confidence: {confidence:.2f}")
+    st.subheader("Prediction:")
+    st.success(f"This plant is likely: **{class_label}**")
